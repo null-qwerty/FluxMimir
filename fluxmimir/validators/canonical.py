@@ -290,7 +290,7 @@ class ArtifactManifestValidator(BaseValidator):
         manifest = _json(path)
         issues: list[ValidationIssue] = []
         actual_paths = set()
-        for directory in ('data', 'videos', 'meta'):
+        for directory in ('data', 'videos', 'meta', 'annotations'):
             base = root / directory
             if base.exists():
                 actual_paths.update(

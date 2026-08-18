@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Mapping, Sequence
 
-from fluxmimir.backends import BaseBackend
+from fluxmimir.backends.base import BaseBackend
 
 
 class BaseAnnotationProvider(BaseBackend, ABC):

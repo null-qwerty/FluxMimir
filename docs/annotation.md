@@ -1,9 +1,52 @@
 # Automated Annotation
 
-> **Planning status:** automated annotation providers, API clients, prompt
-> templates, review services, and annotation runners are interface plans only.
-> FluxMimir does not currently call an external annotation API or promise any
-> model/provider integration.
+> **Implementation status:** the canonical multimodal pre-annotation path is
+> executable. It supports OpenAI-compatible chat-completions endpoints and
+> DashScope-native multimodal endpoints, synchronized multi-camera evidence
+> sampling, strict structured output, idempotent caching, review routing,
+> versioned canonical output, and release validation. Human review services and
+> multi-model adjudication remain future work.
+
+## Executable profile
+
+`configs/annotation/canonical_auto_annotation.py` runs one comprehensive
+`fluxmimir.episode_semantics.v1` request per episode. The schema covers:
+
+- episode task and task category;
+- inclusive-frame temporal subtasks, effectors, objects, and goal conditions;
+- scene description, progress status/reason, and next atomic action;
+- manipulated-object initial/final states and visible state changes;
+- success/failure/partial/uncertain outcome proposal;
+- scoped data-quality flags, confidence, and abstention.
+
+The sampler partitions an episode into bounded clips, uniformly samples time
+points, and combines configured camera views into one evidence image per time
+point. Only evidence hashes and frame references enter the release; request
+images are not copied into annotation metadata.
+
+```bash
+export ANNOTATION_API_KEY='...'
+export ANNOTATION_BASE_URL='https://provider.example/api/v1'
+export ANNOTATION_MODEL='multimodal-model-name'
+
+fluxmimir-annotate \
+  configs/annotation/canonical_auto_annotation.py \
+  --execute
+```
+
+The base URL is normalized. URLs containing `/api/v1` use the DashScope-native
+multimodal endpoint; other URLs use OpenAI-compatible `chat/completions` unless
+`api_mode` is configured explicitly. OpenAI-compatible mode requests JSON
+Schema structured output first and falls back to JSON-object mode. Native mode
+embeds the same schema in the prompt and validates the returned object locally.
+API keys are read only from the configured environment variable and never
+enter returned metadata, cache keys, prompts, or release artifacts.
+
+The writer creates a new minor dataset release, rewrites only the Parquet
+`subtask_index`, hard-links/copies unchanged videos, updates task/subtask and
+episode metadata, stores full proposals below `annotations/`, and rebuilds the
+content manifest. Gaps, overlaps, and out-of-range subtask proposals are never
+hidden: deterministic mapping repairs are recorded and routed to review.
 
 ## Design goals
 
@@ -21,7 +64,7 @@ formats must be translated and validated at the boundary.
 
 ## Versioned records
 
-A planned `AnnotationRequest` contains only what is needed for one logical
+An `AnnotationRequest` contains only what is needed for one logical
 annotation:
 
 - dataset, episode, frame/clip, camera-view, and instruction references;
@@ -31,7 +74,7 @@ annotation:
 - privacy classification, allowed provider class, and retention policy;
 - a deterministic idempotency key.
 
-A planned `AnnotationRecord` should contain:
+An `AnnotationRecord` contains:
 
 - annotation and sample identifiers, schema name/version, and structured values;
 - evidence references and time spans rather than copied media where practical;
@@ -46,10 +89,10 @@ provider responses, if an approved deployment elects to retain them, belong in
 a restricted artifact store with a retention deadline and a content hash; they
 must not appear in normal logs or resolved configuration.
 
-## Planned provider interface
+## Provider interface
 
-Providers are adapters behind one contract, whether the future implementation
-uses a local model or an approved remote multimodal API:
+Providers are adapters behind one contract, whether the deployment uses a local
+model or an approved remote multimodal API:
 
 ```python
 class BaseAnnotationProvider:
@@ -70,7 +113,7 @@ schema requirements must fail before media upload.
 
 ## Annotation and review flow
 
-A future runner should execute these boundaries explicitly:
+The runner executes these boundaries explicitly:
 
 1. Select eligible samples and validate source media/time alignment.
 2. Apply privacy classification, minimization, redaction, and provider policy.
@@ -144,7 +187,7 @@ separate cost line items linked to the same annotation lineage.
 
 Ego video can expose faces, voices, screens, homes, workplaces, bystanders,
 precise locations, or other sensitive context. Before any remote request, a
-future implementation must:
+deployment must:
 
 - verify collection rights, consent, dataset license, purpose, and allowed
   provider/data region;
@@ -162,4 +205,3 @@ Provider credentials are supplied only through process environment variables
 and are handled according to [security.md](security.md). No credential or secret
 value is part of an annotation request, record, provenance manifest, cache key,
 or cost report.
-

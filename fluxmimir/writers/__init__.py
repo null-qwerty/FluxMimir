@@ -1,6 +1,8 @@
+from .annotation import CanonicalAnnotationReleaseWriter
 from .base import BaseWriter
 from .canonical import BaseCanonicalDatasetWriter, CanonicalDatasetWriter
 
 __all__ = [
-    'BaseCanonicalDatasetWriter', 'BaseWriter', 'CanonicalDatasetWriter'
+    'BaseCanonicalDatasetWriter', 'BaseWriter',
+    'CanonicalAnnotationReleaseWriter', 'CanonicalDatasetWriter'
 ]

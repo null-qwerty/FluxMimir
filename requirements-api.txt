@@ -1,2 +1,4 @@
 # Provider-neutral HTTP client for automated annotation services.
 httpx>=0.27,<1
+# Validate provider responses before they enter canonical metadata.
+jsonschema>=4.22,<5

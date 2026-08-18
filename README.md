@@ -7,8 +7,9 @@ FluxVLA.
 
 > **Current status:** AgileX ALOHA HDF to canonical 107D Parquet conversion is
 > executable, including optional streaming MP4 encoding, metadata, masked
-> statistics, manifests, and release validation. Synthesis and annotation
-> backends remain scaffolded.
+> statistics, manifests, and release validation. OpenAI-compatible and
+> DashScope-native multimodal API pre-annotation and versioned release writing
+> are executable. Synthesis backends remain scaffolded.
 
 [中文说明](README_zh-CN.md)
 
@@ -114,8 +115,104 @@ fluxmimir-convert \
 Set `pipeline.stages.2.enabled=False` to validate only HDF-to-Parquet without
 encoding RGB videos. Remove `pipeline.source.max_episodes` only after checking
 the smoke output and selecting an output volume with sufficient capacity.
-Synthesis, annotation, and standalone validation commands still provide only
-their dry-run plans.
+Synthesis and standalone validation commands still provide only their dry-run
+plans.
+
+Annotation requires an explicit `--execute` guard and defaults to one episode
+to bound billable requests:
+
+```bash
+export ANNOTATION_API_KEY='replace-with-a-rotated-key'
+export ANNOTATION_BASE_URL='https://example.com/api/v1'
+export ANNOTATION_MODEL='replace-with-a-multimodal-model-name'
+
+fluxmimir-annotate \
+  configs/annotation/canonical_auto_annotation.py \
+  --execute \
+  --cfg-options \
+  pipeline.source.max_episodes=1 \
+  pipeline.writer.root=work_dirs/datasets/aloha_smoke_annotated
+```
+
+The annotation runner samples synchronized camera evidence and returns task,
+temporal subtasks, scene and progress descriptions, next action, object state
+changes, outcome proposals, and quality flags under a strict JSON Schema. It
+creates a new canonical dataset version, updates task/subtask foreign keys, and
+stores provenance, usage, confidence, evidence hashes, and review state. It
+does not generate numeric robot state or action semantics.
+
+## Automated annotation tutorial
+
+Install the API, video, and canonical-data dependencies:
+
+```bash
+conda activate fluxmimir
+cd /root/projects/FluxMimir
+pip install -e '.[conversion,vision,api]'
+```
+
+Configure credentials only through environment variables. A base URL ending in
+`/api/v1` selects DashScope-native multimodal requests; other provider URLs use
+OpenAI-compatible chat completions unless `api_mode` is overridden.
+
+```bash
+read -rsp 'ANNOTATION_API_KEY: ' ANNOTATION_API_KEY
+export ANNOTATION_API_KEY
+echo
+export ANNOTATION_BASE_URL='https://<workspace>.cn-beijing.maas.aliyuncs.com/api/v1'
+export ANNOTATION_MODEL='replace-with-an-enabled-multimodal-model'
+```
+
+Inspect the plan without reading or uploading media:
+
+```bash
+fluxmimir-annotate \
+  configs/annotation/canonical_auto_annotation.py \
+  --dry-run
+```
+
+Run one billable smoke episode against an existing canonical release:
+
+```bash
+fluxmimir-annotate \
+  configs/annotation/canonical_auto_annotation.py \
+  --execute \
+  --cfg-options \
+  pipeline.source.root=work_dirs/datasets/aloha_smoke \
+  pipeline.source.max_episodes=1 \
+  pipeline.writer.root=work_dirs/datasets/aloha_smoke_annotated
+```
+
+Inspect the complete proposal and canonical dictionaries:
+
+```bash
+python -m json.tool \
+  work_dirs/datasets/aloha_smoke_annotated/annotations/episodes/episode_000000.json
+sed -n '1,5p' work_dirs/datasets/aloha_smoke_annotated/meta/tasks.jsonl
+sed -n '1,20p' work_dirs/datasets/aloha_smoke_annotated/meta/subtasks.jsonl
+```
+
+To annotate a bounded batch or increase visual evidence, override the source
+limit and sampler. One comprehensive API request is issued per episode:
+
+```bash
+fluxmimir-annotate \
+  configs/annotation/canonical_auto_annotation.py \
+  --execute \
+  --cfg-options \
+  pipeline.source.root=work_dirs/datasets/canonical_input \
+  pipeline.source.max_episodes=10 \
+  pipeline.stages.0.max_clips=6 \
+  pipeline.stages.0.frames_per_clip=4 \
+  pipeline.writer.root=work_dirs/datasets/annotated_batch
+```
+
+Output roots must be new and empty. Identical content/schema/prompt/provider/model
+requests reuse `work_dirs/annotation/canonical/annotation_cache/`, but each
+published dataset still requires a new release directory. Review states are
+`auto_accepted`, `pending`, `needs_review`, and `abstained`. AI labels remain
+auditable proposals, so annotation alone does not make a dataset
+`training_ready=true`.
 
 Paths are configurable through the `FLUXMIMIR_*` environment variables used in
 the example configs. API configs contain only credential environment-variable
@@ -139,7 +236,7 @@ work_dirs/     ignored run artifacts
 - [Canonical 107D data contract](docs/data_contract.md)
 - [HDF conversion plan and audit](docs/conversion.md)
 - [Ego-to-robot synthesis plan](docs/synthesis.md)
-- [Automated annotation plan](docs/annotation.md)
+- [Automated annotation implementation and contract](docs/annotation.md)
 - [Secret and data security](docs/security.md)
 
 ## Development

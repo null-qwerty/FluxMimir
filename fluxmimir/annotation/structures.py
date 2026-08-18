@@ -21,12 +21,17 @@ class AnnotationRequest:
 @dataclass(frozen=True)
 class AnnotationRecord:
     request_id: str
+    episode_uid: str
     schema_id: str
     schema_version: str
     payload: Mapping[str, Any]
     provider: str
     model: str
     prompt_version: str
+    review_status: str = 'pending'
     confidence: float | None = None
     raw_response_uri: str | None = None
+    evidence: tuple[Mapping[str, Any], ...] = ()
+    usage: Mapping[str, Any] = field(default_factory=dict)
+    latency_s: float | None = None
     provenance: Mapping[str, Any] = field(default_factory=dict)
